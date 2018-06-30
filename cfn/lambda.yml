@@ -1,0 +1,119 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Lambda CloudFormation template.
+
+Parameters:
+
+  ApplicationName:
+    Default: cn-lambda-kx
+    Description: The name of the application.
+    Type: String
+
+  ArtifactName:
+    Description: Lambda function name/zip file name
+    Type: String
+    Default: helloworld.zip
+
+  LambdaName:
+    Description: Lambda function name
+    Type: String
+    Default: helloworld
+
+  LambdaHandler:
+    Description: The Handler name
+    Type: String
+    Default: src/helloworld.handler
+
+  LambdaTimeout:
+    Description: The Timeout duration
+    Type: String
+    Default: 60
+
+  LambdaRuntime:
+    Description: The Handler name
+    Type: String
+    Default: nodejs8.10
+
+  MemorySize:
+    Description: How much memory do you want to allocate to this Lambda?
+    Type: String
+    Default: "256"
+
+Resources:
+
+  LambdaIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ApplicationName}-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+
+  LambdaIamPolicy:
+    Type: AWS::IAM::Policy
+    DependsOn: LambdaIamRole
+    Properties:
+      PolicyName: !Sub "${ApplicationName}-policy-services"
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: 
+              - !Sub "arn:aws-cn:logs:${AWS::Region}:*:*"
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:ListAllMyBuckets
+              - s3:GetObject
+            Resource:
+              - !Sub "arn:aws-cn:s3:::${ApplicationName}-versions"
+              - !Sub "arn:aws-cn:s3:::${ApplicationName}-versions/*"
+          - Effect: Allow
+            Action:
+              - iam:PassRole
+              - iam:GetServerCertificate
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - ec2:describeVpcs
+              - ec2:describeSubnets
+              - ec2:describeImages
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - ssm:DescribeParameters
+              - ssm:GetParameters
+            Resource:
+              - !Sub "arn:aws-cn:ssm:${AWS::Region}:${AWS::AccountId}:parameter/*"
+
+      Roles:
+        - Ref: LambdaIamRole
+
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: !Ref LambdaHandler
+      FunctionName: !Sub "${LambdaName}"
+      Role: !GetAtt LambdaIamRole.Arn
+      Code:
+        S3Bucket: !Sub "${ApplicationName}-versions"
+        S3Key: !Ref ArtifactName
+      MemorySize: !Ref MemorySize
+      Runtime: !Ref LambdaRuntime
+      Timeout: !Ref LambdaTimeout
